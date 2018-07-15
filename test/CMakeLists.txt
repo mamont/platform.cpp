@@ -1,0 +1,8 @@
+ENABLE_TESTING()
+
+ADD_EXECUTABLE(expected expected.cpp)
+ADD_TEST(NAME expected COMMAND expected)
+
+ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND})
+ADD_DEPENDENCIES(check expected)
+
