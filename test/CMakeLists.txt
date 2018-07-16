@@ -1,8 +1,11 @@
 ENABLE_TESTING()
 
 ADD_EXECUTABLE(expected expected.cpp)
+ADD_EXECUTABLE(future future.cpp)
+
 ADD_TEST(NAME expected COMMAND expected)
+ADD_TEST(NAME future COMMAND future)
 
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND})
-ADD_DEPENDENCIES(check expected)
+ADD_DEPENDENCIES(check expected future)
 
