@@ -19,14 +19,5 @@ TEST_CASE("Basic future", "[future]") {
 TEST_CASE("Basic future rejects", "[future]") {
     promise<std::string> p;
     p.set_exception(std::logic_error("Custom error"));
-    // CHECK_THROWS_AS(p.get_future().get(), std::logic_error);
-
-    try {
-        p.get_future().get();
-    } catch(std::logic_error& e) {
-        REQUIRE(true);
-    } catch(...) {
-        auto current = std::current_exception();
-        REQUIRE(true);
-    }
+    CHECK_THROWS_AS(p.get_future().get(), std::logic_error);
 }
