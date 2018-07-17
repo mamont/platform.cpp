@@ -21,51 +21,107 @@ private:
 template<typename T, typename E>
 class expected {
 public:
-    explicit expected() : _val(T()) {}
-    explicit expected(T&& v) noexcept : _val(std::move(v)) {}
+    typedef expected<T, E> type;
 
-    explicit expected(T const& v) : _val(v) {}
-
-    explicit expected(expected<T, E>&& o) noexcept {
-        // ok = o.ok;
-        // if (ok) {
-        //     _val = std::move(o._val);
-        // } else {
-        //     _exc = std::move(o._exc);
-        // }
+    explicit expected() { new(&_value) T(); }
+    explicit expected(T const& v) { new (&_value) T(v); }
+    template<class TT = T> explicit expected(T&& v) noexcept {
+        new (&_value) T(std::forward<TT>(v));
     }
 
-    explicit expected(unexpected<E> const& e) noexcept 
-        : ok(false), _exc(e.error) {}
+    explicit expected(expected const& v) : ok(v.ok) {
+        if (ok) new(&_value) T(v.value());
+        else new(&_error) E(v.error());
+    }
 
-    explicit expected(unexpected<E>&& e) noexcept 
-        : ok(false), _exc(std::move(e.error)) {}
+    explicit expected(expected && v) : ok(v.ok) {
+        if (ok) new(&_value) T(std::move(v.value()));
+        else new(&_error) E(std::move(v.error()));
+    }
+
+    explicit expected(unexpected<E> const& e) : ok(false) {
+        new(&_error) E(e.error());
+    }
+
+    explicit expected(unexpected<E>&& e) noexcept : ok(false) {
+        new(&_error) T(std::forward<E>(e.error()));
+    }
 
     operator bool() const { return ok; }
 
-    T& operator*() {
-        if (!ok) throw _exc;
-        return _val;
+    T& operator*() & {
+        if constexpr (std::is_same<std::exception_ptr, E>::value) {
+            if (!ok) std::rethrow_exception(_error);
+        } else {
+            if (!ok) throw _error;
+        }
+        return _value;
     }
 
-    E& error() {
+    T&& operator*() && {
+        if constexpr (std::is_same<std::exception_ptr, E>::value) {
+            if (!ok) std::rethrow_exception(_error);
+        } else {
+            if (!ok) throw _error;
+        }
+        return _value;
+    }
+
+    T const& operator*() const& {
+        if constexpr (std::is_same<std::exception_ptr, E>::value) {
+            if (!ok) std::rethrow_exception(_error);
+        } else {
+            if (!ok) throw _error;
+        }
+        return _value;
+    }
+
+    E& error() & {
         assert(!ok);
-        return _exc;
+        return _error;
     }
 
-    expected<T,E>& operator= (expected<T, E>&& o) {
-        // destroy();
-        // 
-        // ok = o.ok;
-        // if (ok) {
-        //     _val = std::move(o._val);
-        // } else {
-        //     _exc = std::move(o._exc);
-        // }
+    E&& error() && {
+        assert(!ok);
+        return _error;
+    }
 
-        // o.ok = true;
-        // new(&o._val) T();
+    T& value() & {
+        assert(ok);
+        return _value;
+    }
 
+    T const& value() const& {
+        assert(ok);
+        return _value;
+    }
+
+    T&& value() && {
+        assert(ok);
+        return _value;
+    }
+
+    expected& operator= (expected&& o) noexcept {
+        destroy();
+
+        ok = o.ok;
+        if (ok) _value = std::move(o._value);
+        else _error = std::move(o._error);
+
+        return *this;
+    }
+
+    expected& operator= (unexpected<E>&& e) {
+        destroy();
+        ok = false;
+        _error = std::move(e.error);
+        return *this;
+    }
+
+    expected& operator= (unexpected<E> const& e) {
+        destroy();
+        ok = false;
+        _error = e.error;
         return *this;
     }
 
@@ -75,14 +131,12 @@ public:
 
 private:
     void destroy() {
-        if (ok) _val.~T();
-        else _exc.~E();
-        ok = false;
+        if (ok) _value.~T();
+        else _error.~E();
     }
 
     bool ok = true;
-    union { T _val; E _exc; };
+    union { T _value; E _error; };
 };
 
 }
-
