@@ -76,6 +76,11 @@ public:
         return _value;
     }
 
+    E const& error() const& {
+        assert(!ok);
+        return _error;
+    }
+
     E& error() & {
         assert(!ok);
         return _error;

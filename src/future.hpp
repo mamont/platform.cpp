@@ -1,7 +1,11 @@
 #include "expected.hpp"
+
 #include <exception>
+#include <type_traits>
 
 namespace hntr::platform {
+
+template<typename T> void ptype(T&& parameter);
 
 template <typename T, typename E>
 class future {
@@ -14,6 +18,12 @@ public:
 
     T& get() { 
         return *_value;
+    }
+
+    template<typename F, typename R = typename std::result_of<F(T())>::type>
+    future<R, E> then(F&& cont)
+    {
+        return future<R, E>(expected<R, E>(cont(*_value)));
     }
 
 private:
