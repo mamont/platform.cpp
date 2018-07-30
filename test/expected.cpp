@@ -31,3 +31,8 @@ TEST_CASE("Non-trivial types are ok", "[expected]") {
     CHECK_THROWS_AS(*unexp, std::string);
 }
 
+TEST_CASE("void is ok", "[expected]") {
+    auto exp = expected<void, std::string>(std::string("aaa"));
+}
+
+

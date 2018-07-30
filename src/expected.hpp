@@ -40,11 +40,11 @@ public:
     }
 
     explicit expected(unexpected<E> const& e) : ok(false) {
-        new(&_error) E(e.error());
+        new(&_error) E(e.error);
     }
 
     explicit expected(unexpected<E>&& e) noexcept : ok(false) {
-        new(&_error) T(std::forward<E>(e.error()));
+        new(&_error) E(std::move(e.error));
     }
 
     operator bool() const { return ok; }
@@ -142,6 +142,92 @@ private:
 
     bool ok = true;
     union { T _value; E _error; };
+};
+
+
+// overload for void
+// Not sure how standard implementatio going to handle this
+// but in my understanding void is valid non-exception
+template<typename E>
+class expected<void, E> {
+public:
+    typedef expected<void, E> type;
+
+    explicit expected() noexcept {}
+
+    explicit expected(expected const& v) : ok(v.ok) {}
+
+    explicit expected(expected && v) : ok(v.ok) {
+        if (!ok) new(&_error) E(std::move(v.error()));
+    }
+
+    explicit expected(unexpected<E> const& e) : ok(false) {
+        new(&_error) E(e.error);
+    }
+
+    explicit expected(unexpected<E>&& e) noexcept : ok(false) {
+        new(&_error) E(std::forward<E>(e.error));
+    }
+
+    operator bool() const { return ok; }
+
+    void operator*() const& {
+        if constexpr (std::is_same<std::exception_ptr, E>::value) {
+            if (!ok) std::rethrow_exception(_error);
+        } else {
+            if (!ok) throw _error;
+        }
+    }
+
+    E const& error() const& {
+        assert(!ok);
+        return _error;
+    }
+
+    E& error() & {
+        assert(!ok);
+        return _error;
+    }
+
+    E&& error() && {
+        assert(!ok);
+        return _error;
+    }
+
+    expected& operator= (expected&& o) noexcept {
+        destroy();
+
+        ok = o.ok;
+        if (!ok) _error = std::move(o._error);
+
+        return *this;
+    }
+
+    expected& operator= (unexpected<E>&& e) {
+        destroy();
+        ok = false;
+        _error = std::move(e.error);
+        return *this;
+    }
+
+    expected& operator= (unexpected<E> const& e) {
+        destroy();
+        ok = false;
+        _error = e.error;
+        return *this;
+    }
+
+    ~expected() {
+        destroy();
+    }
+
+private:
+    void destroy() {
+        if (!ok) _error.~E();
+    }
+
+    bool ok = true;
+    union { E _error; };
 };
 
 }
