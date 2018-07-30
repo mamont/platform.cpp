@@ -39,11 +39,11 @@ public:
         else new(&_error) E(std::move(v.error()));
     }
 
-    explicit expected(unexpected<E> const& e) : ok(false) {
+    expected(unexpected<E> const& e) : ok(false) {
         new(&_error) E(e.error);
     }
 
-    explicit expected(unexpected<E>&& e) noexcept : ok(false) {
+    expected(unexpected<E>&& e) noexcept : ok(false) {
         new(&_error) E(std::move(e.error));
     }
 
