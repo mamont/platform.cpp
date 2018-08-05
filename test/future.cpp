@@ -45,7 +45,7 @@ TEST_CASE("Future is thenable when delayed", "[future]") {
     promise<std::string> p;
 
     std::async(std::launch::async, [&p]() {
-        std::this_thread::sleep_for( std::chrono::seconds{1});
+        std::this_thread::sleep_for( std::chrono::milliseconds{100});
         p.set_value("blah");
     });
 
@@ -75,7 +75,7 @@ TEST_CASE("Future is chainable when delayed", "[future]") {
     promise<std::string> p;
 
     std::async(std::launch::async, [&p]() {
-        std::this_thread::sleep_for( std::chrono::seconds{1});
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
         p.set_value("blah");
     });
 
@@ -90,21 +90,17 @@ TEST_CASE("Future is chainable when delayed", "[future]") {
 }
 
 TEST_CASE("Chainable future ignores continuations after throw", "[future]") {
+    bool isRun = false;
     promise<std::string> p;
-
-    std::async(std::launch::async, [&p]() {
-        std::this_thread::sleep_for( std::chrono::seconds{1});
-        p.set_value("blah");
-    });
-
     auto future = p.get_future()
-            .then([](auto val) {
+            .then([](auto val) -> decltype(val) {
                 throw std::runtime_error("Something happened");
-                return val;
-            }).then([](auto val) {
-                REQUIRE(false); // Shouldn't be here
+            }).then([&](auto val) {
+                isRun = true; // Shouldn't be here
                 return 333;
             });
+    p.set_value("blah");
 
+    REQUIRE(!isRun);
     CHECK_THROWS_AS(future.get(), std::runtime_error);
 }
