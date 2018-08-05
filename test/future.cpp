@@ -88,3 +88,23 @@ TEST_CASE("Future is chainable when delayed", "[future]") {
 
     REQUIRE(result == 66);
 }
+
+TEST_CASE("Chainable future ignores continuations after throw", "[future]") {
+    promise<std::string> p;
+
+    std::async(std::launch::async, [&p]() {
+        std::this_thread::sleep_for( std::chrono::seconds{1});
+        p.set_value("blah");
+    });
+
+    auto future = p.get_future()
+            .then([](auto val) {
+                throw std::runtime_error("Something happened");
+                return val;
+            }).then([](auto val) {
+                REQUIRE(false); // Shouldn't be here
+                return 333;
+            });
+
+    CHECK_THROWS_AS(future.get(), std::runtime_error);
+}

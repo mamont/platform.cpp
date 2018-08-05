@@ -108,7 +108,11 @@ public:
 
     void set_value(expected<I, E> const& value) override {
         if (value) {
-            precursor<O, E>::set_value(expected<O, E>(_handler(*value)));
+            try {
+                precursor<O, E>::set_value(expected<O, E>(_handler(*value)));
+            } catch (...) {
+                precursor<O, E>::set_value(unexpected(std::current_exception()));
+            }
         } else {
             precursor<O, E>::set_value(unexpected(value.error()));
         }
@@ -116,7 +120,11 @@ public:
 
     void set_value(expected<I, E> && value) override {
         if (value) {
-            precursor<O, E>::set_value(expected<O, E>(_handler(*value)));
+            try {
+                precursor<O, E>::set_value(expected<O, E>(_handler(*value)));
+            } catch (...) {
+                precursor<O, E>::set_value(unexpected(std::current_exception()));
+            }
         } else {
             precursor<O, E>::set_value(unexpected(value.error()));
         }
