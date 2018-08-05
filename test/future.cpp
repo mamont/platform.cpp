@@ -29,8 +29,7 @@ TEST_CASE("Basic future rejects", "[future]") {
     CHECK_THROWS_AS(p.get_future().get(), std::logic_error);
 }
 
-#if 0
-TEST_CASE("Future is chainable", "[future]") {
+TEST_CASE("Future is thenable", "[future]") {
     promise<std::string> p;
     p.set_value("blah");
 
@@ -42,7 +41,7 @@ TEST_CASE("Future is chainable", "[future]") {
     REQUIRE(result == 33);
 }
 
-TEST_CASE("Future is chainable when delayed", "[future]") {
+TEST_CASE("Future is thenable when delayed", "[future]") {
     promise<std::string> p;
 
     std::async(std::launch::async, [&p]() {
@@ -57,4 +56,35 @@ TEST_CASE("Future is chainable when delayed", "[future]") {
 
     REQUIRE(result == 33);
 }
-#endif
+
+TEST_CASE("Future is chainable", "[future]") {
+    promise<std::string> p;
+    p.set_value("blah");
+
+    auto result = p.get_future()
+            .then([](auto val) {
+                return 33;
+            }).then([](auto val) {
+                return val * 2;
+            }).get();
+
+    REQUIRE(result == 66);
+}
+
+TEST_CASE("Future is chainable when delayed", "[future]") {
+    promise<std::string> p;
+
+    std::async(std::launch::async, [&p]() {
+        std::this_thread::sleep_for( std::chrono::seconds{1});
+        p.set_value("blah");
+    });
+
+    auto result = p.get_future()
+            .then([](auto val) {
+                return 33;
+            }).then([](auto val) {
+                return val * 2;
+            }).get();
+
+    REQUIRE(result == 66);
+}

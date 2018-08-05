@@ -106,6 +106,16 @@ public:
         return _value;
     }
 
+    expected& operator= (expected const& o) noexcept {
+        destroy();
+
+        ok = o.ok;
+        if (ok) _value = o._value;
+        else _error = o._error;
+
+        return *this;
+    }
+
     expected& operator= (expected&& o) noexcept {
         destroy();
 
@@ -192,6 +202,15 @@ public:
     E&& error() && {
         assert(!ok);
         return _error;
+    }
+
+    expected& operator= (expected const& o) noexcept {
+        destroy();
+
+        ok = o.ok;
+        if (!ok) _error = o._error;
+
+        return *this;
     }
 
     expected& operator= (expected&& o) noexcept {
