@@ -148,6 +148,8 @@ private:
     void destroy() {
         if (ok) _value.~T();
         else _error.~E();
+
+        new(&_error) E();
     }
 
     bool ok = true;
@@ -156,7 +158,7 @@ private:
 
 
 // overload for void
-// Not sure how standard implementatio going to handle this
+// Not sure how standard implementation going to handle this
 // but in my understanding void is valid non-exception
 template<typename E>
 class expected<void, E> {
@@ -208,7 +210,7 @@ public:
         destroy();
 
         ok = o.ok;
-        if (!ok) _error = o._error;
+        if (!ok) new(&_error) E(o._error);
 
         return *this;
     }
@@ -217,7 +219,7 @@ public:
         destroy();
 
         ok = o.ok;
-        if (!ok) _error = std::move(o._error);
+        if (!ok) new(&_error) E(std::move(o._error));
 
         return *this;
     }
