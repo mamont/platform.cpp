@@ -110,8 +110,8 @@ public:
         destroy();
 
         ok = o.ok;
-        if (ok) _value = o._value;
-        else _error = o._error;
+        if (ok) new(&_value) T(o._value);
+        else _error = new(&_error) E(o._error);
 
         return *this;
     }
@@ -120,8 +120,8 @@ public:
         destroy();
 
         ok = o.ok;
-        if (ok) _value = std::move(o._value);
-        else _error = std::move(o._error);
+        if (ok) new(&_value) T(std::move(o._value));
+        else new(&_error) E(std::move(o._error));
 
         return *this;
     }

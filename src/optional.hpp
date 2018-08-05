@@ -1,6 +1,7 @@
 #pragma once
 
 #include <utility>
+#include <exception>
 
 namespace hntr::platform {
 
@@ -11,15 +12,29 @@ public:
     optional(T const& v) : _value(v) {}
     optional(T && v) : _value(std::forward<T>(v)) {}
 
+    optional operator= (optional<T> const& o) {
+        destroy();
+        _ok = o._ok;
+        new(&_value) T(o._value);
+    }
+
+    optional operator= (optional<T>&& o) {
+        destroy();
+        _ok = std::move(o._ok);
+        if(_ok) new(&_value) T(std::move(o._value));
+    }
+
     optional& operator= (T const& v) {
+        destroy();
         _ok = true;
-        _value = v;
+        new(&_value) T(v);
         return *this;
     }
 
     optional& operator= (T && v) {
+        destroy();
         _ok = true;
-        _value = std::move(v);
+        new(&_value) T(std::move(v));
         return *this;
     }
 
@@ -39,13 +54,13 @@ public:
     }
 
     T const& value() const& {
-        assert(_ok);
-        return _value;
+        if (_ok) return _value;
+        throw std::runtime_error("bad optional access");
     }
 
     T& value() & {
-        assert(_ok);
-        return _value;
+        if(_ok) return _value;
+        throw std::runtime_error("bad optional access");
     }
 
     T&& value() && {
@@ -53,11 +68,21 @@ public:
         return _value;
     }
 
-    operator bool() const { return _ok; }
+    operator bool() const {
+        return _ok;
+    }
+
+    ~optional() {
+        destroy();
+    }
 
 private:
+    void destroy() {
+        if (_ok) _value.~T();
+    }
+
     bool _ok = true;
-    T _value;
+    union { T _value; };
 };
 
 }

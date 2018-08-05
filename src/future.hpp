@@ -21,6 +21,7 @@ template <typename T, typename E>
 class continuation {
 public:
     using value_type = expected<T, E>;
+    virtual ~continuation() = default;
 
     virtual void set_value(expected<T, E> const& value) = 0;
     virtual void set_value(expected<T, E> && value) = 0;
@@ -83,7 +84,7 @@ public:
         assert(!_cont);
         _cont = cont;
         if (_value) {
-            _cont->set_value(*_value);
+            _cont->set_value(std::move(*_value));
         }
     }
 
