@@ -101,6 +101,46 @@ TEST_CASE("Chainable future ignores continuations after throw", "[future]") {
             });
     p.set_value("blah");
 
-    REQUIRE(!isRun);
     CHECK_THROWS_AS(future.get(), std::runtime_error);
+    REQUIRE(!isRun);
+}
+
+TEST_CASE("Futures are asynchronously chainable", "[future]") {
+    promise<std::string> p;
+    auto future = p.get_future()
+            .then([](auto val) {
+                auto p = std::make_shared<promise<int>>();
+                std::async(std::launch::async, [p]() {
+                    std::this_thread::sleep_for( std::chrono::milliseconds{100});
+                    p->set_value(123);
+                });
+                return p->get_future();
+            }).then([](auto val) {
+                return val * 2;
+            });
+    p.set_value("blah");
+    REQUIRE(future.get() == 123 * 2);
+}
+
+TEST_CASE("Futures are asynchronously chainable, void result is allowed", "[future]") {
+    bool isRun = false;
+    promise<std::string> p;
+    auto future = p.get_future()
+            .then([](auto val) {
+                auto p = std::make_shared<promise<int>>();
+                std::async(std::launch::async, [p]() {
+                    std::this_thread::sleep_for( std::chrono::milliseconds{100});
+                    p->set_value(123);
+                });
+                return p->get_future();
+            })
+            .then([](auto val) {})
+            .then([&isRun]() {
+                isRun = true;
+            });
+
+    REQUIRE(!isRun);
+    p.set_value("blah");
+    future.get();
+    REQUIRE(isRun);
 }

@@ -15,6 +15,10 @@ namespace hntr::platform {
 
 template<typename T> void ptype(T&& parameter);
 
+template <typename T, typename E> class promise;
+template <typename T, typename E> class future;
+template <typename T, typename E> class cancellable_future;
+
 namespace details {
 
 template <typename T, typename E>
@@ -23,8 +27,8 @@ public:
     using value_type = expected<T, E>;
     virtual ~continuation() = default;
 
-    virtual void set_value(expected<T, E> const& value) = 0;
-    virtual void set_value(expected<T, E> && value) = 0;
+    virtual void handle(expected<T, E> const& value) = 0;
+    virtual void handle(expected<T, E> && value) = 0;
 };
 
 
@@ -70,12 +74,18 @@ public:
         std::lock_guard lock(_mutex);
         assert(!_value);
         _value = v;
+        if (_cont) {
+            _cont->handle(*_value);
+        }
         _cond.notify_all();
     }
 
     void set_value(value_type&& v) {
         std::lock_guard lock(_mutex);
         _value = std::move(v);
+        if (_cont) {
+            _cont->handle(*_value);
+        }
         _cond.notify_all();
     }
 
@@ -84,7 +94,7 @@ public:
         assert(!_cont);
         _cont = cont;
         if (_value) {
-            _cont->set_value(std::move(*_value));
+            _cont->handle(std::move(*_value));
         }
     }
 
@@ -97,41 +107,126 @@ private:
 
 template <typename T, typename E> using precursor_ptr = std::shared_ptr<precursor<T,E>>;
 
+template<typename handler_type, typename arg_type, typename error_type> struct resolver;
 
-template <typename I, typename O, typename E>
+template <typename Handler_t, typename I, typename O, typename E>
 class link
-        : public continuation<I, E>
-        , public precursor<O, E>
+    : public continuation<I, E>
+    , public precursor<O, E>
+    , public std::enable_shared_from_this<link<Handler_t, I, O, E>>
 {
 public:
-    link(std::function<O(I)> const& handler) : _handler(handler) {}
-    link(std::function<O(I)>&& handler) : _handler(handler) {}
+    link(Handler_t && handler) : _handler(std::forward<Handler_t>(handler)) {}
+    link(Handler_t const& handler) : _handler(handler) {}
 
-    void set_value(expected<I, E> const& value) override {
+    void handle(expected<I, E> const& value) override {
+        execute_handler(value);
+    }
+
+    void handle(expected<I, E> && value) override {
+        execute_handler(std::move(value));
+    }
+
+private:
+    template <typename T = expected<I, E>>
+    void execute_handler(T&& value) {
         if (value) {
+            execute_handler_impl(std::forward<T>(value));
+        } else {
+            precursor<O, E>::set_value(unexpected(value.error()));
+        }
+    }
+
+    template <typename T = expected<I, E>, typename II = I>
+    auto execute_handler_impl(T&& value) -> typename std::enable_if_t<!std::is_void_v<II>, void> {
+        if constexpr (!resolver<Handler_t, I, E>::is_future::value) {
             try {
-                precursor<O, E>::set_value(expected<O, E>(_handler(*value)));
+                if constexpr (!std::is_void_v<O>) {
+                    precursor<O, E>::set_value(expected<O, E>(_handler(*value)));
+                } else {
+                    _handler(*value);
+                    precursor<O, E>::set_value(expected<O, E>());
+                }
             } catch (...) {
                 precursor<O, E>::set_value(unexpected(std::current_exception()));
             }
         } else {
-            precursor<O, E>::set_value(unexpected(value.error()));
+            if constexpr (!std::is_void_v<O>) {
+                _handler(*value).then([w = link::weak_from_this()](O result) {
+                    if (auto self = w.lock()) {
+                        self->set_value(expected<O, E>(result));
+                    }
+                });
+            } else {
+                _handler(*value).then([w = link::weak_from_this()]() {
+                    if (auto self = w.lock()) {
+                        self->set_value(expected<O, E>());
+                    }
+                });
+            }
         }
-    };
+    }
 
-    void set_value(expected<I, E> && value) override {
-        if (value) {
+    template <typename T = expected<void, E>, typename II = I>
+    auto execute_handler_impl(T&& value) -> typename std::enable_if_t<std::is_void_v<II>, void> {
+        if constexpr (!resolver<Handler_t, I, E>::is_future::value) {
             try {
-                precursor<O, E>::set_value(expected<O, E>(_handler(*value)));
+                if constexpr (!std::is_void_v<O>) {
+                    precursor<O, E>::set_value(expected<O, E>(_handler()));
+                } else {
+                    _handler();
+                    precursor<O, E>::set_value(expected<O, E>());
+                }
             } catch (...) {
                 precursor<O, E>::set_value(unexpected(std::current_exception()));
             }
         } else {
-            precursor<O, E>::set_value(unexpected(value.error()));
+            if constexpr (!std::is_void_v<O>) {
+                _handler().then([w = link::weak_from_this()](O result) {
+                    if (auto self = w.lock()) {
+                        self->set_value(expected<O, E>(result));
+                    }
+                });
+            } else {
+                _handler().then([w = link::weak_from_this()]() {
+                    if (auto self = w.lock()) {
+                        self->set_value(expected<O, E>());
+                    }
+                });
+            }
         }
-    };
+    }
 
-    std::function<O(I)> _handler;
+    Handler_t _handler;
+};
+
+
+template<typename T, typename E> struct extract_future_type { typedef T value_type; typedef E error_type; typedef std::false_type is_future; };
+template<typename T, typename E> struct extract_future_type<future<T, E>, E> { typedef T value_type; typedef E error_type; typedef std::true_type is_future; };
+template<typename T, typename E> struct extract_future_type<cancellable_future<T, E>, E> { typedef T value_type; typedef E error_type; typedef std::true_type is_future; };
+
+template<typename handler_type, typename arg_type, typename error_type>
+struct resolver {
+    using raw_return_type = decltype(std::declval<handler_type>()(std::declval<arg_type>()));
+    using return_type = typename extract_future_type<raw_return_type, error_type>::value_type;
+    using is_future = typename extract_future_type<raw_return_type, error_type>::is_future;
+
+    template <typename F>
+    static auto make_continuation(F&& handler) {
+        return std::make_shared<details::link<handler_type, arg_type, return_type, error_type>>(handler);
+    }
+};
+
+template<typename handler_type, typename error_type>
+struct resolver<handler_type, void, error_type> {
+    using raw_return_type = decltype(std::declval<handler_type>()());
+    using return_type = typename extract_future_type<raw_return_type, error_type>::value_type;
+    using is_future = typename extract_future_type<raw_return_type, error_type>::is_future;
+
+    template <typename F>
+    static auto make_continuation(F&& handler) {
+        return std::make_shared<details::link<handler_type, void, return_type, error_type>>(handler);
+    }
 };
 
 } // namespace details
@@ -144,12 +239,20 @@ public:
     explicit future() {}
     explicit future(details::precursor_ptr<T, E> value) : _value(std::move(value)) {}
 
-    T& get() & {
+    template <typename TT = T, typename = typename std::enable_if_t<!std::is_void_v<TT>>>
+    TT& get() & {
         return *_value->get();
     }
 
-    T const& get() const& {
+    template <typename TT = T, typename = typename std::enable_if_t<!std::is_void_v<TT>>>
+    TT const& get() const& {
         return *_value->get();
+    }
+
+    template <typename TT = T>
+    typename std::enable_if_t<std::is_void_v<TT>, void>
+    get() {
+        *_value->get();
     }
 
     template <class _Rep, class _Period>
@@ -157,11 +260,11 @@ public:
         return _value->get(duration);
     }
 
-    template<typename F, typename R = decltype(std::declval<F>()(std::declval<T>()))>
+    template<typename F, typename R = typename details::resolver<F, T, E>::return_type>
     future<R, E> then(F&& handler) {
-        auto l = std::make_shared<details::link<T, R, E>>(std::forward<std::function<R(T)>>(handler));
-        _value->set_continuation(std::static_pointer_cast<details::continuation<T, E>>(l));
-        return future<R, E>(l);
+        auto cont = details::resolver<F, T, E>::make_continuation(std::forward<F>(handler));
+        _value->set_continuation(std::static_pointer_cast<details::continuation<T, E>>(cont));
+        return future<R, E>(cont);
     }
 
 private:
@@ -171,46 +274,46 @@ private:
 template <typename T, typename E = std::exception_ptr>
 class promise {
 public:
-    explicit promise() : _continuation(std::make_shared<details::precursor<T,E>>()) {}
-    promise(promise&& o) : _continuation(std::move(o._continuation)) {}
+    explicit promise() : _vc(std::make_shared<details::precursor<T,E>>()) {}
+    promise(promise&& o) : _vc(std::move(o._continuation)) {}
 
     void set_value(T&& v) {
-        assert(_continuation);
-        _continuation->set_value(expected<T, E>(std::forward<T>(v)));
+        assert(_vc);
+        _vc->set_value(expected<T, E>(std::forward<T>(v)));
     }
 
     void set_value(T const& v) {
-        assert(_continuation);
-        _continuation->set_value(expected<T, E>(v));
+        assert(_vc);
+        _vc->set_value(expected<T, E>(v));
     }
 
     void set_exception(E&& e) {
-        assert(!_continuation);
-        _continuation->set_value(unexpected(std::forward<E>(e)));
+        assert(!_vc);
+        _vc->set_value(unexpected(std::forward<E>(e)));
     }
 
     void set_exception(E const& e) {
-        assert(!_continuation);
-        _continuation->set_value(unexpected(e));
+        assert(!_vc);
+        _vc->set_value(unexpected(e));
     }
 
     template <typename EE = E>
     void set_exception(EE&& e) {
-        assert(!*_continuation);
+        assert(!*_vc);
         if constexpr (std::is_base_of_v<std::exception, EE> && std::is_same_v<std::exception_ptr, E>) {
-            _continuation->set_value(unexpected(std::make_exception_ptr(e)));
+            _vc->set_value(unexpected(std::make_exception_ptr(e)));
         } else {
-            _continuation->set_value(unexpected(std::forward<E>(e)));
+            _vc->set_value(unexpected(std::forward<E>(e)));
         }
     }
 
     future<T, E> get_future() {
-        assert(_continuation);
-        return future<T, E>(_continuation);
+        assert(_vc);
+        return future<T, E>(_vc);
     }
 
 private:
-    details::precursor_ptr<T, E> _continuation;
+    details::precursor_ptr<T, E> _vc;
 };
 
 } // namespace hntr::platform

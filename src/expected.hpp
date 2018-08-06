@@ -29,12 +29,12 @@ public:
         new (&_value) T(std::forward<TT>(v));
     }
 
-    explicit expected(expected const& v) : ok(v.ok) {
+    expected(expected const& v) : ok(v.ok) {
         if (ok) new(&_value) T(v.value());
         else new(&_error) E(v.error());
     }
 
-    explicit expected(expected && v) : ok(v.ok) {
+    expected(expected && v) : ok(v.ok) {
         if (ok) new(&_value) T(std::move(v.value()));
         else new(&_error) E(std::move(v.error()));
     }
@@ -167,17 +167,17 @@ public:
 
     explicit expected() noexcept {}
 
-    explicit expected(expected const& v) : ok(v.ok) {}
+    expected(expected const& v) : ok(v.ok) {}
 
-    explicit expected(expected && v) : ok(v.ok) {
+    expected(expected && v) : ok(v.ok) {
         if (!ok) new(&_error) E(std::move(v.error()));
     }
 
-    explicit expected(unexpected<E> const& e) : ok(false) {
+    expected(unexpected<E> const& e) : ok(false) {
         new(&_error) E(e.error);
     }
 
-    explicit expected(unexpected<E>&& e) noexcept : ok(false) {
+    expected(unexpected<E>&& e) noexcept : ok(false) {
         new(&_error) E(std::forward<E>(e.error));
     }
 
