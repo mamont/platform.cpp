@@ -1,7 +1,5 @@
 SET(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 
-ENABLE_TESTING()
-
 ADD_EXECUTABLE(expected expected.cpp)
 ADD_EXECUTABLE(future future.cpp)
 
