@@ -138,8 +138,7 @@ private:
     }
 
     template <typename T = expected<I, E>>
-    void execute_handler_impl(T&& value) 
-        requires std::negation_v<std::is_void<I>>
+    void execute_handler_impl(T&& value) requires std::negation_v<std::is_void<I>>
     {
         if constexpr (!resolver<Handler_t, I, E>::is_future::value) {
             try {
@@ -170,8 +169,7 @@ private:
     }
 
     template <typename T = expected<void, E>>
-    void execute_handler_impl(T&& value) 
-        requires std::is_void_v<I>
+    void execute_handler_impl(T&& value) requires std::is_void_v<I> 
     {
         if constexpr (!resolver<Handler_t, I, E>::is_future::value) {
             try {
@@ -244,8 +242,7 @@ public:
     explicit future(details::precursor_ptr<T, E> value) : _value(std::move(value)) {}
 
     template <typename TT = T>
-    TT& get()& requires std::is_void_v<TT>
-    {
+    TT& get() & requires std::is_void_v<TT> {
         return *_value->get();
     }
 
@@ -259,8 +256,8 @@ public:
         *_value->get();
     }
 
-    template <class _Rep, class _Period>
-    optional<T> get(std::chrono::duration<_Rep, _Period> const& duration) {
+    template <class Rep, class Period>
+    optional<T> get(std::chrono::duration<Rep, Period> const& duration) {
         return _value->get(duration);
     }
 
