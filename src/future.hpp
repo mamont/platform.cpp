@@ -243,19 +243,19 @@ public:
     explicit future() {}
     explicit future(details::precursor_ptr<T, E> value) : _value(std::move(value)) {}
 
-    template <typename TT = T, typename = typename std::enable_if_t<!std::is_void_v<TT>>>
-    TT& get() & {
-        return *_value->get();
-    }
-
-    template <typename TT = T, typename = typename std::enable_if_t<!std::is_void_v<TT>>>
-    TT const& get() const& {
+    template <typename TT = T>
+    TT& get()& requires std::is_void_v<TT>
+    {
         return *_value->get();
     }
 
     template <typename TT = T>
-    typename std::enable_if_t<std::is_void_v<TT>, void>
-    get() {
+    TT const& get() const& requires std::negation_v<std::is_void<TT>> {
+        return *_value->get();
+    }
+
+    template <typename TT = T>
+    void get() requires std::is_void_v<TT> {
         *_value->get();
     }
 
