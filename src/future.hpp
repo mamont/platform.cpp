@@ -169,8 +169,7 @@ private:
     }
 
     template <typename T = expected<void, E>>
-    void execute_handler_impl(T&& value) requires std::is_void_v<I> 
-    {
+    void execute_handler_impl(T&& value) requires std::is_void_v<I> {
         if constexpr (!resolver<Handler_t, I, E>::is_future::value) {
             try {
                 if constexpr (!std::is_void_v<O>) {
