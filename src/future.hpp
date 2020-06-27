@@ -137,8 +137,10 @@ private:
         }
     }
 
-    template <typename T = expected<I, E>, typename II = I>
-    auto execute_handler_impl(T&& value) -> typename std::enable_if_t<!std::is_void_v<II>, void> {
+    template <typename T = expected<I, E>>
+    void execute_handler_impl(T&& value) 
+        requires std::negation_v<std::is_void<I>>
+    {
         if constexpr (!resolver<Handler_t, I, E>::is_future::value) {
             try {
                 if constexpr (!std::is_void_v<O>) {
@@ -167,8 +169,10 @@ private:
         }
     }
 
-    template <typename T = expected<void, E>, typename II = I>
-    auto execute_handler_impl(T&& value) -> typename std::enable_if_t<std::is_void_v<II>, void> {
+    template <typename T = expected<void, E>>
+    void execute_handler_impl(T&& value) 
+        requires std::is_void_v<I>
+    {
         if constexpr (!resolver<Handler_t, I, E>::is_future::value) {
             try {
                 if constexpr (!std::is_void_v<O>) {
