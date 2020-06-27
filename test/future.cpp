@@ -44,7 +44,7 @@ TEST_CASE("Future is thenable", "[future]") {
 TEST_CASE("Future is thenable when delayed", "[future]") {
     promise<std::string> p;
 
-    std::async(std::launch::async, [&p]() {
+    const auto ar = std::async(std::launch::async, [&p]() {
         std::this_thread::sleep_for( std::chrono::milliseconds{100});
         p.set_value("blah");
     });
@@ -74,7 +74,7 @@ TEST_CASE("Future is chainable", "[future]") {
 TEST_CASE("Future is chainable when delayed", "[future]") {
     promise<std::string> p;
 
-    std::async(std::launch::async, [&p]() {
+    const auto ap = std::async(std::launch::async, [&p]() {
         std::this_thread::sleep_for(std::chrono::milliseconds{100});
         p.set_value("blah");
     });
@@ -86,6 +86,7 @@ TEST_CASE("Future is chainable when delayed", "[future]") {
                 return val * 2;
             }).get();
 
+    REQUIRE(ap.valid());
     REQUIRE(result == 66);
 }
 
@@ -110,10 +111,11 @@ TEST_CASE("Futures are asynchronously chainable", "[future]") {
     auto future = p.get_future()
             .then([](auto val) {
                 auto p = std::make_shared<promise<int>>();
-                std::async(std::launch::async, [p]() {
+                const auto ap = std::async(std::launch::async, [&p]() {
                     std::this_thread::sleep_for( std::chrono::milliseconds{100});
                     p->set_value(123);
                 });
+                REQUIRE(ap.valid());
                 return p->get_future();
             }).then([](auto val) {
                 return val * 2;
@@ -128,10 +130,11 @@ TEST_CASE("Futures are asynchronously chainable, void result is allowed", "[futu
     auto future = p.get_future()
             .then([](auto val) {
                 auto p = std::make_shared<promise<int>>();
-                std::async(std::launch::async, [p]() {
+                const auto ap = std::async(std::launch::async, [&p]() {
                     std::this_thread::sleep_for( std::chrono::milliseconds{100});
                     p->set_value(123);
                 });
+                REQUIRE(ap.valid());
                 return p->get_future();
             })
             .then([](auto val) {})
