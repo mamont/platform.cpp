@@ -1,10 +1,14 @@
 SET(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+FIND_PACKAGE(Threads REQUIRED)
 
 ADD_EXECUTABLE(expected expected.cpp)
 ADD_EXECUTABLE(future future.cpp)
 
 ADD_TEST(NAME expected COMMAND expected)
 ADD_TEST(NAME future COMMAND future)
+
+TARGET_LINK_LIBRARIES(expected Threads::Threads)
+TARGET_LINK_LIBRARIES(future Threads::Threads)
 
 ADD_CUSTOM_TARGET(check COMMAND ${CMAKE_CTEST_COMMAND})
 ADD_DEPENDENCIES(check expected future)
